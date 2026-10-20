@@ -1,177 +1,165 @@
 {
   "manifest_version": 1,
   "type": "device",
-  "name": "Demo Devices Template",
+  "name": "Balboa Spa",
   "description": {
-    "en": "Starter template showing sensors, a switch, a dimmable light and a smart plug.",
-    "fr": "Template de démarrage : capteurs, interrupteur, lampe variable et prise connectée."
+    "en": "Balboa spas with a BWA Wi-Fi module, locally: temperature, setpoint, pumps, lights, filtration.",
+    "fr": "Spas Balboa avec module Wi-Fi BWA, en local : température, consigne, pompes, éclairage."
   },
-  "version": "1.0.0",
-  "docker_image": "ghcr.io/gladysassistant/integration-template-js:1.0.0",
+  "version": "0.1.0",
+  "docker_image": "ghcr.io/lm1lc3n7/gladys-balboa:0.1.0",
   "gladys_version": ">=5.1.0",
-  "cover_image": "https://raw.githubusercontent.com/GladysAssistant/integration-template-js/master/cover.png",
-  "categories": ["lighting", "security", "environment"],
-  "transports": ["local", "cloud"],
+  "cover_image": "https://raw.githubusercontent.com/LM1LC3N7/gladys-balboa/main/cover.png",
+  "categories": ["appliances", "climate"],
+  "transports": ["local"],
   "config_schema": [
     {
       "key": "intro",
       "type": "section",
-      "label": { "en": "Getting started", "fr": "Pour commencer" },
+      "label": {
+        "en": "Your spa",
+        "fr": "Votre spa"
+      },
       "description": {
-        "en": "The demo weather station reads real data from the free Open-Meteo API: pick the coordinates to observe. No account, no API key.",
-        "fr": "La station météo de démonstration lit de vraies données via l'API gratuite Open-Meteo : choisissez les coordonnées à observer. Pas de compte, pas de clé d'API."
+        "en": "Shows your Balboa spa (BP, GS, EL controllers with a BWA Wi-Fi module, as used by the Balboa Worldwide App) in Gladys over your local network, without any cloud: water temperature, setpoint, heat mode, pumps, blowers, lights and filter cycles. Enter the IP address of the Wi-Fi module (give it a fixed address in your router), save, then add the spa from the Discovery tab. The module accepts few connections at once: close the Balboa app on the local network if Gladys cannot connect. The local protocol is not documented by Balboa and has no password: keep the module on a trusted network. Never tested with a real spa. Not affiliated with Balboa Water Group.",
+        "fr": "Affiche votre spa Balboa (régulateurs BP, GS, EL avec module Wi-Fi BWA, celui de l'appli Balboa Worldwide App) dans Gladys par votre réseau local, sans cloud : température de l'eau, consigne, mode de chauffe, pompes, souffleurs, éclairage et cycles de filtration. Saisissez l'adresse IP du module Wi-Fi (donnez-lui une adresse fixe dans votre routeur), enregistrez, puis ajoutez le spa depuis l'onglet Découverte. Le module accepte peu de connexions à la fois : fermez l'appli Balboa en local si Gladys ne se connecte pas. Le protocole local n'est pas documenté par Balboa et n'a pas de mot de passe : gardez le module sur un réseau de confiance. Jamais testé avec un vrai spa. Sans lien avec Balboa Water Group."
       },
       "links": [
         {
-          "url": "https://open-meteo.com/en/docs",
-          "label": { "en": "Open-Meteo documentation", "fr": "Documentation Open-Meteo" }
+          "url": "https://github.com/LM1LC3N7/gladys-balboa/blob/main/docs/fr.md",
+          "label": {
+            "en": "Guide (French)",
+            "fr": "Guide (français)"
+          }
+        },
+        {
+          "url": "https://github.com/LM1LC3N7/gladys-balboa/blob/main/docs/en.md",
+          "label": {
+            "en": "Guide (English)",
+            "fr": "Guide (anglais)"
+          }
         }
       ]
     },
     {
-      "key": "latitude",
-      "type": "number",
-      "label": { "en": "Latitude", "fr": "Latitude" },
-      "description": {
-        "en": "Latitude used for the demo weather sensor.",
-        "fr": "Latitude utilisée par le capteur météo de démonstration."
+      "key": "address",
+      "type": "string",
+      "label": {
+        "en": "IP address of the Wi-Fi module",
+        "fr": "Adresse IP du module Wi-Fi"
       },
-      "placeholder": { "en": "e.g. 48.8566", "fr": "ex. 48.8566" },
+      "description": {
+        "en": "An IPv4 address or a host name (port 4257 unless you add one, for example 192.168.1.80:4257).",
+        "fr": "Une adresse IPv4 ou un nom d'hôte (port 4257 sauf si vous en ajoutez un, par exemple 192.168.1.80:4257)."
+      },
+      "placeholder": {
+        "en": "192.168.1.80",
+        "fr": "192.168.1.80"
+      },
       "required": true,
-      "default": 48.8566,
-      "min": -90,
-      "max": 90
+      "default": ""
     },
     {
-      "key": "longitude",
-      "type": "number",
-      "label": { "en": "Longitude", "fr": "Longitude" },
-      "description": {
-        "en": "Longitude used for the demo weather sensor.",
-        "fr": "Longitude utilisée par le capteur météo de démonstration."
+      "key": "allow_heating",
+      "type": "boolean",
+      "label": {
+        "en": "Allow the heating commands",
+        "fr": "Autoriser les commandes de chauffage"
       },
-      "placeholder": { "en": "e.g. 2.3522", "fr": "ex. 2.3522" },
-      "required": true,
-      "default": 2.3522,
-      "min": -180,
-      "max": 180
+      "description": {
+        "en": "Off by default. On: Gladys may change the setpoint (up to the ceiling below) and put the heat mode on \"Ready\". Off: these commands are refused. \"Rest\" (heats during filtration only) is always allowed.",
+        "fr": "Désactivé par défaut. Activé : Gladys peut changer la consigne (jusqu'au plafond ci-dessous) et mettre le mode de chauffe sur « Prêt ». Désactivé : ces commandes sont refusées. « Repos » (chauffe pendant la filtration seulement) reste toujours permis."
+      },
+      "required": false,
+      "default": false
     },
     {
-      "key": "unit",
+      "key": "max_temperature",
+      "type": "number",
+      "label": {
+        "en": "Setpoint ceiling (°C)",
+        "fr": "Plafond de la consigne (°C)"
+      },
+      "description": {
+        "en": "Gladys never sets the spa above this temperature. 38 °C by default, from 30 to 40 °C (never more than 40 °C, the limit of spa standards, whatever is typed).",
+        "fr": "Gladys ne règle jamais le spa au-dessus de cette température. 38 °C par défaut, de 30 à 40 °C (jamais plus de 40 °C, la limite des normes des spas, quoi qu'on saisisse)."
+      },
+      "required": false,
+      "default": 38,
+      "min": 30,
+      "max": 40
+    },
+    {
+      "key": "allow_jets",
+      "type": "boolean",
+      "label": {
+        "en": "Allow the pumps",
+        "fr": "Autoriser les pompes"
+      },
+      "description": {
+        "en": "Off by default. On: Gladys may start the pumps and blowers (jets). Off: only \"Off\" is accepted.",
+        "fr": "Désactivé par défaut. Activé : Gladys peut démarrer les pompes et souffleurs (jets). Désactivé : seul « Arrêt » est accepté."
+      },
+      "required": false,
+      "default": false
+    },
+    {
+      "key": "allow_lights",
+      "type": "boolean",
+      "label": {
+        "en": "Allow turning the lights on",
+        "fr": "Autoriser l'allumage de l'éclairage"
+      },
+      "description": {
+        "en": "On by default. Off: Gladys may only turn the spa lights off.",
+        "fr": "Activé par défaut. Désactivé : Gladys peut seulement éteindre l'éclairage du spa."
+      },
+      "required": false,
+      "default": true
+    },
+    {
+      "key": "language",
       "type": "select",
-      "label": { "en": "Temperature unit", "fr": "Unité de température" },
-      "required": false,
-      "default": "celsius",
-      "options": [
-        { "value": "celsius", "label": { "en": "Celsius", "fr": "Celsius" } },
-        { "value": "fahrenheit", "label": { "en": "Fahrenheit", "fr": "Fahrenheit" } }
-      ]
-    },
-    {
-      "key": "poll_frequency",
-      "type": "number",
-      "label": { "en": "Refresh interval (s)", "fr": "Intervalle de rafraîchissement (s)" },
+      "label": {
+        "en": "Language of the feature names",
+        "fr": "Langue des noms des fonctionnalités"
+      },
       "description": {
-        "en": "How often sensors are polled, in seconds (one minute minimum).",
-        "fr": "Fréquence d'interrogation des capteurs, en secondes (une minute minimum)."
+        "en": "Used for the names of the device and features added from now on, for the state texts and for the command errors.",
+        "fr": "Sert aux noms de l'appareil et des fonctionnalités ajoutés désormais, aux textes d'état et aux erreurs des commandes."
       },
       "required": false,
-      "default": 300,
-      "min": 60,
-      "max": 3600
+      "default": "fr",
+      "options": [
+        {
+          "value": "fr",
+          "label": {
+            "en": "French",
+            "fr": "Français"
+          }
+        },
+        {
+          "value": "en",
+          "label": {
+            "en": "English",
+            "fr": "Anglais"
+          }
+        }
+      ]
     }
   ],
   "actions": [
     {
-      "key": "test_weather",
-      "label": { "en": "Test the weather provider", "fr": "Tester le fournisseur météo" },
+      "key": "test_connection",
+      "label": {
+        "en": "Test the connection",
+        "fr": "Tester la connexion"
+      },
+      "description": {
+        "en": "Connects to the spa if needed and shows its state.",
+        "fr": "Se connecte au spa si besoin et affiche son état."
+      },
       "timeout_seconds": 30
-    },
-    {
-      "key": "identify",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
-        }
-      ]
-    }
-  ],
-  "scene_triggers": [
-    {
-      "key": "motion_detected",
-      "label": { "en": "Motion detected", "fr": "Mouvement détecté" },
-      "description": {
-        "en": "A demo motion sensor saw a person or an animal move.",
-        "fr": "Un détecteur de démonstration a vu bouger une personne ou un animal."
-      },
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Sensor", "fr": "Détecteur" }
-        },
-        {
-          "key": "target",
-          "type": "multi_select",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" },
-          "options": [
-            { "value": "person", "label": { "en": "Person", "fr": "Personne" } },
-            { "value": "animal", "label": { "en": "Animal", "fr": "Animal" } }
-          ]
-        }
-      ],
-      "variables": [
-        {
-          "key": "target",
-          "type": "string",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" }
-        }
-      ]
-    }
-  ],
-  "scene_actions": [
-    {
-      "key": "identify_device",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "description": {
-        "en": "Make a device signal itself (the demo light blinks).",
-        "fr": "Fait se signaler un appareil (la lampe de démonstration clignote)."
-      },
-      "timeout_seconds": 15,
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
-        }
-      ],
-      "outputs": [
-        {
-          "key": "signalled",
-          "type": "boolean",
-          "label": { "en": "Device signalled", "fr": "Appareil signalé" }
-        }
-      ]
-    }
-  ],
-  "widgets": [
-    {
-      "key": "demo_status",
-      "label": { "en": "Demo status", "fr": "État de la démo" },
-      "description": {
-        "en": "Live temperature and plug power, plug connection and observed location.",
-        "fr": "Température et puissance en direct, connexion de la prise, position observée."
-      },
-      "icon": "activity",
-      "action_timeout_seconds": 15
     }
   ]
 }

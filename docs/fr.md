@@ -1,67 +1,117 @@
-# Template de démonstration
+# Spa Balboa pour Gladys
 
-Ceci est la documentation utilisateur de l'intégration. Gladys ré-héberge ce
-fichier et affiche un lien **Documentation** permanent vers lui dans l'écran
-de configuration (dans la langue de l'utilisateur, avec l'anglais en repli) —
-c'est au moment de configurer que l'utilisateur en a le plus besoin. Gardez
-les courtes indications d'accueil dans les blocs `section` du `config_schema`
-du manifest ; mettez ici le pas-à-pas détaillé (captures d'écran, dépannage…).
+Affiche votre spa **Balboa** dans Gladys par votre réseau local, grâce au
+**module Wi-Fi BWA** (celui de l'appli Balboa Worldwide App), sans cloud :
+température de l'eau, consigne, mode de chauffe, pompes, souffleurs,
+éclairage, cycles de filtration et pompe de circulation.
+
+**Jamais testé avec un vrai spa.** Le protocole local n'est pas documenté
+par Balboa : cette intégration suit ce que fait
+[pybalboa](https://github.com/natekspencer/pybalboa) (la bibliothèque de
+l'intégration Balboa de Home Assistant). Sans lien avec Balboa Water Group.
+
+## Avant de commencer
+
+- Un régulateur Balboa (séries BP, GS, EL…) avec un **module Wi-Fi BWA**
+  (BWG), connecté à votre Wi-Fi.
+- L'**adresse IP** du module : cherchez-la dans votre box (souvent nommée
+  `BWGSpa`) et donnez-lui une adresse fixe (réservation DHCP).
+- Le module parle sur le port TCP **4257**, sans mot de passe : gardez-le
+  sur un **réseau de confiance** (pas de redirection de port depuis
+  internet).
+- Le module accepte peu de connexions à la fois : si Gladys ne se connecte
+  pas, fermez l'appli Balboa en local, et n'utilisez pas en même temps
+  l'intégration Balboa de Home Assistant sur le même spa.
+
+## Installation
+
+1. Installez l'intégration depuis le store.
+2. Dans sa configuration, saisissez l'**adresse IP du module Wi-Fi** (par
+   exemple `192.168.1.80` ; un autre port s'ajoute ainsi :
+   `192.168.1.80:4257`), puis enregistrez.
+3. « Tester la connexion » affiche l'état : « Connecté : Balboa BP501G1. »
+4. Dans l'onglet **Découverte**, ajoutez le spa.
 
 ## Ce que vous obtenez
 
-Six appareils de démonstration apparaissent après l'installation : une
-station météo (vraies données Open-Meteo), un interrupteur, une lampe
-variable, une prise connectée avec mesure de puissance, un détecteur de
-mouvement et une caméra.
+| Fonctionnalité              | Type                                              | Remarques                                       |
+| --------------------------- | ------------------------------------------------- | ----------------------------------------------- |
+| Température de l'eau        | température (°C)                                  | Envoyée au plus toutes les 10 à 15 s            |
+| Consigne                    | thermostat (°C)                                   | Commande, voir « Chauffage »                    |
+| Chauffe                     | lecture seule, 0/1                                | 1 quand le réchauffeur tourne                   |
+| Mode de chauffe             | liste : Prêt / Repos                              | Commande, voir « Chauffage »                    |
+| État du spa                 | texte                                             | État, mode de chauffe, chauffe, remarques Wi-Fi |
+| Plage de température        | texte                                             | Basse / Haute (lecture seule)                   |
+| Cycles de filtration 1 et 2 | lecture seule, 0/1                                | 1 pendant le cycle                              |
+| Pompe de circulation        | lecture seule, 0/1                                | Si le spa en a une                              |
+| Pompes 1 à 8                | liste : Arrêt / Lent / Rapide (ou Arrêt / Marche) | Pompes 1–6 commandables, 7–8 en lecture seule   |
+| Souffleurs                  | liste                                             | Commandables                                    |
+| Éclairages                  | lumière allumée/éteinte                           | Commandables                                    |
+| Auxiliaires, brumisateurs   | lecture seule, 0/1                                | Si le spa en a                                  |
 
-## Configuration
+Un spa réglé en °F est affiché en °C. Les fonctionnalités suivent la
+configuration que le spa annonce ; une fonctionnalité ne disparaît jamais
+d'un appareil déjà créé.
 
-1. Ouvrez l'onglet **Configuration** de l'intégration.
-2. Renseignez la **latitude** et la **longitude** que la station météo de
-   démonstration doit observer (Paris par défaut), et choisissez votre unité
-   de température. L'**intervalle de rafraîchissement** règle la fréquence
-   de lecture de la station météo et de la puissance de la prise : toutes
-   les 5 minutes par défaut, toutes les minutes au plus.
-3. Enregistrez : les appareils apparaissent dans l'onglet **Découverte**,
-   prêts à être ajoutés.
+## Chauffage
 
-Le réglage **Préférer la connexion locale** pilote la prise de
-démonstration : elle affiche en badge le canal réellement utilisé (local ou
-cloud), avec un point orange quand elle fonctionne en mode dégradé (local
-refusé, bascule cloud).
+Désactivé par défaut : activez **« Autoriser les commandes de chauffage »**
+pour que Gladys puisse changer la **consigne** et mettre le mode de chauffe
+sur **« Prêt »**.
 
-## Actions
+- **Plafond de la consigne** : Gladys ne règle jamais le spa au-dessus.
+  **38 °C par défaut**, réglable de 30 à 40 °C, **jamais plus de 40 °C** (la
+  limite des normes des spas), quoi qu'on saisisse. Par pas de 0,5 °C ; le
+  spa doit accepter la valeur dans sa plage actuelle (plage basse : 10 à
+  37 °C, plage haute : 26,5 à 40 °C par défaut).
+- **« Repos »** (chauffe pendant la filtration seulement) est toujours
+  permis : il réduit la chauffe.
+- La plage de température (basse/haute) est en lecture seule.
 
-- **Tester le fournisseur météo** — effectue une requête en direct vers
-  Open-Meteo et affiche la température et l'humidité actuelles sous le
-  bouton.
-- **Identifier un appareil** — choisissez un de vos appareils dans la liste
-  et il se signale (la lampe de démonstration « clignote » dans les logs).
+## Pompes et souffleurs
 
-## Scènes
+Désactivés par défaut : activez **« Autoriser les pompes »** pour démarrer
+les jets. **« Arrêt » est toujours accepté** (un arrêt n'est jamais refusé,
+et annule une commande de pompe encore en cours). Ce sont des listes,
+jamais des interrupteurs : un « éteins tout » d'un assistant vocal ou d'une
+scène ne peut pas les atteindre.
 
-L'intégration ajoute ses propres cartes à l'éditeur de scènes (Gladys 5.1
-ou plus récent), dans la catégorie **Intégrations** :
+Le spa ne connaît que des appuis « vitesse suivante » : Gladys envoie un
+appui à la fois et attend que le spa l'affiche avant le suivant (Lent →
+Rapide → Arrêt pour une pompe à deux vitesses).
 
-- **Mouvement détecté** (déclencheur) — lance la scène quand un détecteur
-  de démonstration voit bouger quelque chose. Choisissez éventuellement le
-  détecteur et ce qui a bougé (personne, animal) ; laissés vides, toute
-  détection correspond. Les actions suivantes peuvent lire ce qui a bougé
-  avec `{{triggerEvent.data.target}}`.
-- **Identifier un appareil** (action) — fait se signaler l'appareil choisi.
-  Elle indique si l'appareil a pu se signaler, pour que les actions
-  suivantes puissent en dépendre.
+## Éclairage
 
-## Tableau de bord
+Allumage et extinction permis par défaut. Désactivez **« Autoriser
+l'allumage de l'éclairage »** pour que Gladys puisse seulement l'éteindre.
 
-Ajoutez le widget **État de la démo** à un tableau de bord : il affiche en
-direct la température de la station météo et la puissance de la prise du
-bureau, la connexion utilisée par la prise (en orange si dégradée) et la
-position observée. Son bouton **Identifier la lampe** fait se signaler la
-lampe de démonstration.
+## Comment se passent les commandes
+
+- Chaque commande attend un état que le spa envoie **après** votre clic (le
+  spa en envoie un environ chaque seconde) : rien n'est décidé sur un état
+  ancien.
+- Les options et le plafond sont revérifiés juste avant l'envoi de chaque
+  trame.
+- Une trame part dans les 3,5 s qui suivent le clic, ou pas du tout. Si le
+  spa n'affiche pas le changement à 4,3 s, la réponse est **« Commande
+  envoyée, sans confirmation »** : vérifiez le spa quelques secondes plus
+  tard. Gladys ne renvoie jamais le même appui sur un résultat inconnu
+  (pendant 20 s, jusqu'à ce que le spa l'affiche).
+- Une commande à la fois.
 
 ## Dépannage
 
-L'intégration journalise tout ce qu'elle fait : consultez les logs de
-l'intégration depuis l'interface Gladys (ou `docker logs` sur l'hôte) avec
-`LOG_LEVEL=debug` pour le détail complet.
+- « Pas de connexion au spa » : vérifiez l'adresse IP, que le module est
+  sur votre réseau, et qu'aucune autre application ne l'occupe. Gladys
+  réessaie après 10 s, 30 s, 1, 2, puis toutes les 5 minutes.
+- « Connecté au module Wi-Fi, en attente du spa… » : le module répond mais
+  le spa n'envoie encore rien (spa en démarrage, ou module qui a perdu le
+  spa).
+- L'état indique « le spa ne répond pas au module » : le module signale
+  qu'il ne parle plus au régulateur du spa.
+
+## Vie privée
+
+Tout reste sur votre réseau local. Pas de compte, pas de cloud, pas de mot
+de passe. L'adresse MAC du module sert d'identifiant à l'appareil dans
+Gladys ; elle n'est jamais écrite dans les journaux.

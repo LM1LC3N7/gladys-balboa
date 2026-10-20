@@ -12,44 +12,31 @@ the notes of the version's GitHub Release.
 
 ### Added
 
-- A working example of scene triggers, scene actions and dashboard widgets
-  (Gladys 5.1.0 or later).
-- `CHANGELOG.md`, rolled by the Release workflow.
-- A GitHub Release for every version, with its changelog section as notes: the
-  Gladys Supervision page links each version to the repository's releases.
-- CI runs the tests on Node 22 and 24, and builds the Docker image.
-- Dependabot keeps the npm dependencies and the GitHub Actions up to date.
-- `SECURITY.md` (how to report a vulnerability) and `CLAUDE.md` (project rules
-  for contributors and coding assistants).
-- Manifest tests: `version` matches `package.json`, `docker_image` is tagged
-  with it, descriptions hold 10 to 100 characters, placeholders are
-  multi-language objects.
-- The latitude and longitude fields show an example value as placeholder.
+- Balboa spas with a BWA Wi-Fi module, over the local network (TCP 4257, no
+  cloud, no account), by the IP address of the module; the protocol of
+  pybalboa (the library of Home Assistant's Balboa integration).
+- One device per spa (identified by the MAC address of its module): water
+  temperature, setpoint, heating, heat mode, spa status, temperature range,
+  filter cycles, circulation pump, pumps, blowers, lights, auxiliaries and
+  misters, as the spa's device configuration reports them; always in °C.
+- Heating commands behind "Allow the heating commands" (off by default):
+  the setpoint, never above the configured ceiling (38 °C by default, 30 to
+  40 °C) nor 40 °C, and the "Ready" heat mode. "Rest" is always allowed.
+- Pumps and blowers as lists (never switches) behind "Allow the pumps" (off
+  by default); "Off" is always allowed and cancels a pump command still
+  running. Lights on/off, turning them on can be disabled.
+- Every command is decided on a status received after the click, checks
+  the options and the ceiling again right before each frame, sends its
+  presses one at a time (each after a status showed the previous one),
+  leaves within 3.5 s or not at all, and answers "sent, without
+  confirmation" when the spa does not show the change by 4.3 s.
+- Own frame reader: bounded frames (length 5 to 64), both delimiters and the
+  checksum checked, the connection dropped on a stream that is not a spa.
+- Keep-alive after 15 s of silence, reconnection after 45 s; failures
+  retried after 10 s to 5 minutes.
+- A republished device never loses a feature; status, Discovery and badge
+  sent again at every reconnection to Gladys.
+- "Test the connection" button; documentation in English and French;
+  `LICENSE` and `THIRD_PARTY_NOTICES.md` shipped in the image.
 
-### Changed
-
-- Node.js 22 or later is required (Node 20 is end-of-life).
-- Integration SDK 0.15.0. The tests now run against the fake Gladys of the
-  SDK, which refuses the payloads Gladys refuses.
-- The refresh interval is one minute minimum, the fastest Gladys polls a
-  device. The plug's power is only sent when it changes, and every 30
-  minutes otherwise.
-
-### Fixed
-
-- Gladys refused the devices of the Discovery tab: the weather station and
-  the plug declared their poll frequency in seconds instead of one of the
-  values Gladys accepts, and were never polled. They now poll every minute,
-  and the readings follow the refresh interval of the configuration.
-
-- The release commit no longer fails `npm run format:check`: the Release
-  workflow updates the manifest `version` and `docker_image` in place instead
-  of re-printing the whole file with `jq`.
-- The integration can write to `/data`: the image creates the directory owned
-  by the `node` user, a new Docker volume was owned by root.
-- A sub-container running the integration's own image follows it to the new
-  tag at each release, as well as in the manifest of the build summary: it kept
-  the previous tag, which may not exist on the registry. Sub-containers on a
-  third-party image (a broker, a database...) keep theirs.
-
-[Unreleased]: https://github.com/GladysAssistant/integration-template-js/commits/main
+[Unreleased]: https://github.com/LM1LC3N7/gladys-balboa/commits/main
