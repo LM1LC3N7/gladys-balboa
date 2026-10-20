@@ -30,7 +30,8 @@ async function setup(t, { config = CONFIG, spa = fakeSpa(), create = true, logs 
     connect: spa.connect,
     now: () => Date.now(),
   });
-  registerHandlers(gladys, app);
+  // As index.js does: the handlers log too (refused commands).
+  registerHandlers(gladys, app, recorder(logs));
   const advance = async (ms, step = 100) => {
     for (let elapsed = 0; elapsed < ms; elapsed += step) {
       const delta = Math.min(step, ms - elapsed);
@@ -346,12 +347,10 @@ test('a toggle the spa does not apply: "sent, without confirmation", then guarde
   spa.ignore = true;
   assert.match((await command('pump-2', 'on')).error, /Commande envoyée, sans confirmation/);
   assert.equal(spa.commands().length, 1);
-  // The same again while the first may still act: nothing sent, on its way.
-  assert.equal((await command('pump-2', 'on')).success, true);
-  // Another one: refused, never a second toggle on an unknown outcome.
+  // The same again while the first may still act: refused, never "success"
+  // and never a second press on an unknown outcome.
+  assert.match((await command('pump-2', 'on')).error, /pas encore confirmée/);
   spa.ignore = false;
-  spa.pumps[0] = 1;
-  await advance(SECOND);
   assert.equal(spa.commands().length, 1);
   await advance(20 * SECOND);
   // The guard expired: decided again on a fresh status.
@@ -529,6 +528,9 @@ test('the MAC address never appears in the logs', async (t) => {
   const { command } = await setup(t, { config: { ...HEATING, allow_jets: true }, logs });
   await command('pump-1', 'low');
   await command('target-temperature', 37);
+  // A refused command is logged by the handlers: its role, never its external id.
+  assert.equal((await command('target-temperature', 39)).success, false);
+  assert.ok(logs.some((l) => /Command target-temperature refused/.test(l)));
   assert.ok(logs.length > 0);
   assert.ok(logs.every((l) => !l.includes(MAC) && !/00:15:27/i.test(l)));
 });

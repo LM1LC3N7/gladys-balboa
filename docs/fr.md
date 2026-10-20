@@ -64,21 +64,31 @@ sur **« Prêt »**.
   limite des normes des spas), quoi qu'on saisisse. Par pas de 0,5 °C ; le
   spa doit accepter la valeur dans sa plage actuelle (plage basse : 10 à
   37 °C, plage haute : 26,5 à 40 °C par défaut).
-- **« Repos »** (chauffe pendant la filtration seulement) est toujours
-  permis : il réduit la chauffe.
+- **« Repos »** (chauffe pendant la filtration seulement) n'est jamais
+  refusé par une option : il réduit la chauffe.
+- **« Prêt »** garde la consigne réglée sur le spa : il est refusé quand
+  cette consigne (peut-être réglée au panneau) dépasse le plafond.
 - La plage de température (basse/haute) est en lecture seule.
 
 ## Pompes et souffleurs
 
 Désactivés par défaut : activez **« Autoriser les pompes »** pour démarrer
-les jets. **« Arrêt » est toujours accepté** (un arrêt n'est jamais refusé,
-et annule une commande de pompe encore en cours). Ce sont des listes,
-jamais des interrupteurs : un « éteins tout » d'un assistant vocal ou d'une
-scène ne peut pas les atteindre.
+les jets. **« Arrêt » n'est jamais refusé par une option**, et annule une
+commande encore en cours qui n'est pas un arrêt. Il peut quand même être
+refusé si l'état du spa est inconnu, si un appui précédent ne s'est pas
+encore affiché, ou s'il ne reste plus le temps de l'envoyer. Ce sont des
+listes, jamais des interrupteurs : un « éteins tout » d'un assistant vocal
+ou d'une scène ne peut pas les atteindre. Plusieurs arrêts à la fois (une
+scène qui éteint tout) s'exécutent côte à côte.
 
 Le spa ne connaît que des appuis « vitesse suivante » : Gladys envoie un
 appui à la fois et attend que le spa l'affiche avant le suivant (Lent →
 Rapide → Arrêt pour une pompe à deux vitesses).
+
+Quand le spa a à la fois une pompe de circulation et un souffleur 1, l'état
+du souffleur 1 est inconnu (le protocole, tel qu'on le connaît, les lit sur
+le même bit) : il n'est ni affiché ni commandé tant qu'un vrai spa n'a pas
+confirmé comment le lire.
 
 ## Éclairage
 
@@ -89,15 +99,18 @@ l'allumage de l'éclairage »** pour que Gladys puisse seulement l'éteindre.
 
 - Chaque commande attend un état que le spa envoie **après** votre clic (le
   spa en envoie un environ chaque seconde) : rien n'est décidé sur un état
-  ancien.
+  ancien, et une trame ne part pas si un état plus récent est arrivé depuis
+  la décision.
 - Les options et le plafond sont revérifiés juste avant l'envoi de chaque
   trame.
 - Une trame part dans les 3,5 s qui suivent le clic, ou pas du tout. Si le
-  spa n'affiche pas le changement à 4,3 s, la réponse est **« Commande
-  envoyée, sans confirmation »** : vérifiez le spa quelques secondes plus
-  tard. Gladys ne renvoie jamais le même appui sur un résultat inconnu
-  (pendant 20 s, jusqu'à ce que le spa l'affiche).
-- Une commande à la fois.
+  spa n'affiche pas le changement (dans un état envoyé après la trame) à
+  4,3 s, la réponse est **« Commande envoyée, sans confirmation »** :
+  vérifiez le spa quelques secondes plus tard. Gladys n'envoie jamais
+  d'autre appui sur un résultat inconnu (pendant 20 s, jusqu'à ce que le spa
+  l'affiche) : une nouvelle commande est refusée entre-temps, un arrêt
+  l'attend.
+- Une commande à la fois, arrêts à part.
 
 ## Dépannage
 

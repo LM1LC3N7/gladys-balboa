@@ -39,4 +39,24 @@ the notes of the version's GitHub Release.
 - "Test the connection" button; documentation in English and French;
   `LICENSE` and `THIRD_PARTY_NOTICES.md` shipped in the image.
 
+### Changed (review 1)
+
+- Several stops at once (a scene turning everything off) run side by side
+  on different equipment; on the same equipment one after the other.
+- A repeated command while a previous press is not confirmed is refused,
+  never answered "success" without a frame; a stop waits for the press to
+  show and decides on the state after it.
+- Commands decide on the latest status, a frame is not sent if a newer
+  status arrived since the decision, and only a status received after the
+  frame confirms it or lifts its guard (the setpoint also checks the unit
+  and range of the spa right before sending).
+- A module changing its identity on one connection is dropped; what the
+  module says about itself is republished at most every 5 s; only the
+  connected spa and the created devices are remembered.
+- Blower 1 of a spa with a circulation pump: state unknown, commands
+  refused (the two overlap in the protocol as known).
+- "Ready" refused when the setpoint set on the spa is above the ceiling.
+- A refused command is logged with its role only, never its external id
+  (which holds the MAC).
+
 [Unreleased]: https://github.com/LM1LC3N7/gladys-balboa/commits/main

@@ -4,6 +4,7 @@
 // -----------------------------------------------------------------------------
 
 import { ACTIONS } from './constants.js';
+import { parseFeatureId } from './devices.js';
 
 export function registerHandlers(gladys, app, logger) {
   gladys.onScanRequest(() => app.scan());
@@ -16,7 +17,9 @@ export function registerHandlers(gladys, app, logger) {
     try {
       await app.setValue(device, feature, value);
     } catch (err) {
-      logger?.warn(`Command ${feature?.external_id} refused: ${err.message}`);
+      // The role only: the external id carries the MAC of the module.
+      const role = parseFeatureId(feature?.external_id)?.role ?? 'unknown feature';
+      logger?.warn(`Command ${role} refused: ${err.message}`);
       throw err;
     }
   });

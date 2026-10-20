@@ -62,20 +62,29 @@ change the **setpoint** and put the heat mode on **"Ready"**.
   of spa standards), whatever is typed. Steps of 0.5 °C; the spa must accept
   the value in its current range (low range: 10–37 °C, high range:
   26.5–40 °C by default).
-- **"Rest"** (heats during filtration only) is always allowed: it lowers
-  the heating.
+- **"Rest"** (heats during filtration only) is never refused by an option:
+  it lowers the heating.
+- **"Ready"** keeps the setpoint set on the spa: it is refused when that
+  setpoint (perhaps set at the panel) is above the ceiling.
 - The temperature range (low/high) is read only.
 
 ## Pumps and blowers
 
 Off by default: turn on **"Allow the pumps"** to start the jets. **"Off"
-is always accepted** (a stop is never refused, and cancels a pump command
-still running). They are lists, never on/off switches: a "turn everything
-off" of a voice assistant or a scene cannot reach them.
+is never refused by an option**, and cancels a command still running that
+is not a stop. It can still be refused when the spa state is unknown, when
+a previous press has not shown yet, or when there is no time left to send
+it. They are lists, never on/off switches: a "turn everything off" of a
+voice assistant or a scene cannot reach them. Several stops at once (a
+scene turning everything off) run side by side.
 
 The spa only knows "next speed" presses: Gladys sends one press at a time
 and waits for the spa to show it before the next one (Low → High → Off for
 a two-speed pump).
+
+When the spa has both a circulation pump and blower 1, the state of blower
+1 is unknown (the protocol, as known, reads them from the same bit): it is
+not shown and not commanded until a real spa confirms how to read it.
 
 ## Lights
 
@@ -85,14 +94,17 @@ let Gladys turn them off.
 ## How commands behave
 
 - Each command waits for a status the spa sends **after** your click (the
-  spa sends one about every second): nothing is decided on an old state.
+  spa sends one about every second): nothing is decided on an old state,
+  and a frame is not sent if a newer state arrived since the decision.
 - The options and the ceiling are checked again right before each frame
   leaves.
 - A frame is sent within 3.5 s of the click or not at all. If the spa does
-  not show the change by 4.3 s, the answer is **"Command sent, without
-  confirmation"**: check the spa a few seconds later. Gladys never sends the
-  same press again on an unknown outcome (for 20 s, until the spa shows it).
-- One command at a time.
+  not show the change (in a state sent after the frame) by 4.3 s, the answer
+  is **"Command sent, without confirmation"**: check the spa a few seconds
+  later. Gladys never sends another press on an unknown outcome (for 20 s,
+  until the spa shows it): a new command is refused meanwhile, a stop waits
+  for it.
+- One command at a time, stops aside.
 
 ## Troubleshooting
 

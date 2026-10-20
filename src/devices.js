@@ -106,6 +106,17 @@ export function statesOf(configuration, kind, number) {
   return list?.find((entry) => entry.index === number - 1)?.states ?? 2;
 }
 
+/**
+ * Blower 1 when the spa also has a circulation pump: pybalboa reads blower 1
+ * from bits 1–2 of status byte 13 and the circulation pump from bit 1, so a
+ * running circulation pump would read as a running blower. Its state is
+ * unknown (never published, never decided on) until a real capture says
+ * how to read it.
+ */
+export function blowerAmbiguous(configuration, number) {
+  return number === 1 && Boolean(configuration?.circulation);
+}
+
 /** Whether a role is a command: a pump 1–6, a blower, a light, the heat mode or the setpoint. */
 export function isCommand(role) {
   if (role === F.TARGET_TEMPERATURE || role === F.HEAT_MODE) {
@@ -322,6 +333,9 @@ export function valueOf(role, status, configuration, language) {
   switch (equipment.kind) {
     case F.PUMP:
     case F.BLOWER: {
+      if (equipment.kind === F.BLOWER && blowerAmbiguous(configuration, equipment.number)) {
+        return undefined;
+      }
       const raw = equipment.kind === F.PUMP ? status.pumps[i] : status.blowers[i];
       const option = speedOf(raw, statesOf(configuration, equipment.kind, equipment.number));
       if (option === undefined) {

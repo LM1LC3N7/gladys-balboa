@@ -44,7 +44,9 @@ up to date at the end of every milestone.
   keep-alive), and the longest message it sends (frames above 64 bytes of
   length are rejected).
 - Blower and circulation bits of the status (pybalboa reads the blower from
-  bits 1–2 and 3–4 of byte 13, overlapping the circulation pump bit).
+  bits 1–2 and 3–4 of byte 13, overlapping the circulation pump bit): until
+  a capture of a spa with both, blower 1 of such a spa is unknown and not
+  commanded.
 
 ## Decisions
 
@@ -74,7 +76,8 @@ up to date at the end of every milestone.
   printable ASCII only; temperatures outside −20–80 °C are unknown.
 - **One spa per integration, identified by the module MAC** (module
   identification): the IP address may change. Another MAC at the same
-  address drops what was learnt. The MAC is never logged.
+  address on a new connection drops what was learnt; on the same connection
+  it drops the connection. The MAC is never logged.
 - **Features and units**: water temperature `temperature-sensor/probe` °C
   (sent every 10–15 s: it moves slowly and the status comes every second);
   setpoint `thermostat/target-temperature` °C, slider 10–40 (frozen at
@@ -115,10 +118,38 @@ up to date at the end of every milestone.
   press at a time, the next only after a status showed the previous one
   (at most states − 1 presses; 2 for the heat mode). **Guards**: after every
   frame, until a status shows another value than the one before it (never
-  lifted on an unknown or equal value), 20 s at most: a command asking the
-  same target answers at once, another is refused ("not confirmed yet"); a
-  stop waits for the guard (within its 3.5 s) and decides on the status
-  after it.
+  lifted on an unknown or equal value), 20 s at most: a command (even the
+  same target) is refused ("not confirmed yet"), never answered "success"
+  without a frame; a stop waits for the guard (within its 3.5 s) and decides
+  on the status after it.
+- **Review round 1 (2026-10-20)**:
+  - B1: stops on different equipment run side by side (a scene column
+    turning everything off); on the same equipment one after the other; a
+    stop cancels every non-stop command running; a non-stop command stays
+    refused while any command runs. Test: four stops at once.
+  - B2: the "same target under a guard → success" shortcut removed (the
+    guard's target is the end of a multi-press command, not the effect of a
+    press). Test: a repeated "off" on an unconfirmed press is refused.
+  - B3: the handlers log the role of a refused command, never its external
+    id (it holds the MAC). The tests pass a logger to `registerHandlers`.
+  - I1: decisions on the latest status (read synchronously right before
+    the frame, never the one a wait resolved with); `beforeSend` refuses
+    ("state changed") when a newer status arrived; the setpoint also checks
+    the unit and range of the latest status; confirmations, move waits and
+    guard lifting only on a status received after the frame (sequence
+    number). Tests: °F then °C in one chunk; "on" then "off" in one chunk.
+  - I2: a second MAC on one connection drops it (protocol, backoff); the
+    roles remembered only for the spa connected and the devices created;
+    module information republished at most every 5 s (the first status at
+    once). Tests: 400 MAC changes, 400 system informations in 10 s.
+  - I3: blower 1 of a spa with a circulation pump has an unknown state (the
+    bits overlap): never published, its commands refused ("current value
+    unknown"). Docs say it.
+  - M1: docs say "never refused by an option" (an unknown state, a guard or
+    the deadline can still refuse a stop).
+  - M2: "Ready" refused when the setpoint set on the spa is unknown or above
+    the ceiling, checked again before the frame.
+  - M3 (lowering the setpoint needs `allow_heating`): kept, as accepted.
 - **Temperature range** read only in v1: switching range makes the spa
   restore the setpoint of the other range, which could be above the
   ceiling.

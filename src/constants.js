@@ -97,6 +97,8 @@ export const TIMINGS = {
   stateHeartbeat: 30 * MINUTE,
   /** The water temperature and the clock change often: states queued at most this often. */
   statesEvery: 10 * SECOND,
+  /** What the module says about itself is republished at most this often. */
+  changedEvery: 5 * SECOND,
   /** The "Test the connection" button. */
   testCooldown: 10 * SECOND,
   testWait: 8 * SECOND,

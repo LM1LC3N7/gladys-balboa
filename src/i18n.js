@@ -174,6 +174,15 @@ export const ERRORS = {
     'The spa does not report this equipment: not sent.',
     'Le spa ne signale pas cet équipement : non envoyée.',
   ),
+  stateChanged: both(
+    'The spa state changed just before sending: not sent.',
+    "L'état du spa a changé juste avant l'envoi : non envoyée.",
+  ),
+  readyAboveCap: (target, cap) =>
+    both(
+      `The setpoint set on the spa (${target} °C) is above the ceiling (${cap} °C): "Ready" not sent.`,
+      `La consigne réglée sur le spa (${String(target).replace('.', ',')} °C) dépasse le plafond (${String(cap).replace('.', ',')} °C) : « Prêt » non envoyé.`,
+    ),
   stillRunning: both(
     'Another command to the spa is still running: not sent.',
     'Une autre commande vers le spa est encore en cours : non envoyée.',

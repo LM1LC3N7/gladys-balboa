@@ -23,13 +23,15 @@
 //     until a status shows the expected state (never lifted on an unknown
 //     state), never retried;
 //   - the ack never waits for a publication to Gladys;
-//   - one command at a time.
+//   - one command at a time; stops run side by side on different
+//     equipment (a scene turning everything off).
 // -----------------------------------------------------------------------------
 
 import { DEVICE_TRANSPORTS, createLogger } from '@gladysassistant/integration-sdk';
 import { addressKey, normalizeConfig, numberOf } from './config.js';
 import { FEATURES as F, SETPOINT_FEATURE, SPA_CAP, TIMINGS } from './constants.js';
 import {
+  blowerAmbiguous,
   buildDevice,
   deviceIds,
   deviceStates,
@@ -92,8 +94,10 @@ export class BalboaApp {
     this.badge = undefined;
     this.lastTestAt = -Infinity;
     this.watchdog = undefined;
-    /** The command running: `{ run, promise }`. */
-    this.inFlight = undefined;
+    this.changeTimer = undefined;
+    this.lastChangedAt = -Infinity;
+    /** The commands running: `{ role, run, promise }`. */
+    this.inFlight = new Set();
     /** `${mac}:${role}` -> { from, expected, moved, until }: a toggle sent, not seen yet. */
     this.guards = new Map();
   }
@@ -113,6 +117,8 @@ export class BalboaApp {
       error: undefined,
       timer: undefined,
       mac: undefined,
+      /** The MAC given on the current connection: another one drops it. */
+      connMac: undefined,
       info: undefined,
       setup: undefined,
       configuration: undefined,
@@ -155,6 +161,10 @@ export class BalboaApp {
     if (this.watchdog) {
       this.timers.clearInterval(this.watchdog);
       this.watchdog = undefined;
+    }
+    if (this.changeTimer) {
+      this.timers.clearTimeout(this.changeTimer);
+      this.changeTimer = undefined;
     }
     const spa = this.spa;
     if (spa) {
@@ -278,6 +288,7 @@ export class BalboaApp {
     spa.lastFrameAt = this.now();
     spa.configTries = 0;
     spa.configAt = -Infinity;
+    spa.connMac = undefined;
     // A new connection: what the spa says about itself is asked again.
     spa.status = undefined;
     spa.statusKey = undefined;
@@ -391,6 +402,14 @@ export class BalboaApp {
         if (!id) {
           return;
         }
+        if (spa.connMac && spa.connMac !== id.mac) {
+          // Two identities on one connection: not a spa we can trust. Dropped,
+          // and the backoff applies.
+          this.logger.warn('Balboa: the module changed its identity, connection dropped');
+          spa.conn.drop(new BalboaError(ERROR_KINDS.PROTOCOL, { sent: true }));
+          return;
+        }
+        spa.connMac = id.mac;
         if (spa.mac && spa.mac !== id.mac) {
           // Another module answers at this address: what was learnt goes.
           this.logger.warn('Balboa: another spa answers at this address');
@@ -434,9 +453,35 @@ export class BalboaApp {
     }
   }
 
-  /** Something the device depends on changed: published in the background. */
-  changed() {
-    this.publishAll().catch((err) => this.logger.warn(`Publishing failed: ${err.message}`));
+  /**
+   * Something the device depends on changed: published in the background,
+   * at most once every TIMINGS.changedEvery (a module repeating its
+   * configuration never floods Gladys); `now` for the first status.
+   */
+  changed(now = false) {
+    const run = () => {
+      this.lastChangedAt = this.now();
+      this.publishAll().catch((err) => this.logger.warn(`Publishing failed: ${err.message}`));
+    };
+    if (now) {
+      run();
+      return;
+    }
+    if (this.changeTimer) {
+      return;
+    }
+    const wait = this.lastChangedAt + TIMINGS.changedEvery - this.now();
+    if (wait <= 0) {
+      run();
+      return;
+    }
+    const generation = this.generation;
+    this.changeTimer = this.timers.setTimeout(() => {
+      this.changeTimer = undefined;
+      if (generation === this.generation) {
+        run();
+      }
+    }, wait);
   }
 
   onStatus(spa, payload) {
@@ -451,13 +496,13 @@ export class BalboaApp {
     spa.statusKey = key;
     spa.statusSeq += 1;
     if (spa.mac) {
-      this.observe(spa.mac, status);
+      this.observe(spa.mac, status, spa.statusSeq);
     }
     for (const waiter of [...spa.waiters]) {
       waiter.check();
     }
     if (first) {
-      this.changed();
+      this.changed(true);
       return;
     }
     if (!same) {
@@ -490,12 +535,21 @@ export class BalboaApp {
 
   /** The roles of a spa: those of its configuration, then any other seen during this run. */
   rolesFor(mac) {
-    const seen = this.seen.get(mac) ?? new Set();
     const roles = mac === this.spa?.mac ? rolesOf(this.spa.configuration) : rolesOf(undefined);
+    // Remembered only for the spa connected and the devices created: bounded.
+    const kept = new Set([this.spa?.mac, ...this.ourDevices().map((entry) => entry.mac)]);
+    for (const key of [...this.seen.keys()]) {
+      if (!kept.has(key)) {
+        this.seen.delete(key);
+      }
+    }
+    const seen = this.seen.get(mac) ?? new Set();
     for (const role of roles) {
       seen.add(role);
     }
-    this.seen.set(mac, seen);
+    if (kept.has(mac)) {
+      this.seen.set(mac, seen);
+    }
     return [...roles, ...[...seen].filter((role) => !roles.includes(role))];
   }
 
@@ -807,35 +861,44 @@ export class BalboaApp {
     this.checkAllowed(target.role, wanted);
     const after = this.spa?.statusSeq ?? 0;
     const run = { protective: wanted.protective, cancelled: false, waiter: undefined };
-    const previous = this.inFlight;
-    if (previous) {
-      if (!run.protective) {
+    const running = [...this.inFlight];
+    if (!run.protective) {
+      // One command at a time, stops aside.
+      if (running.length > 0) {
         throw this.refusal(ERRORS.stillRunning);
       }
-      if (!previous.run.protective) {
-        // A stop never waits behind the command it stops.
-        previous.run.cancelled = true;
-        previous.run.waiter?.end('cancelled');
+    } else {
+      for (const entry of running) {
+        if (!entry.run.protective) {
+          // A stop never waits behind the command it stops.
+          entry.run.cancelled = true;
+          entry.run.waiter?.end('cancelled');
+        }
       }
     }
+    // Stops on different equipment run side by side (a scene turning
+    // everything off); on the same equipment, one after the other.
+    const sameRole = running.filter((entry) => entry.role === target.role);
     const promise = (async () => {
-      if (previous) {
-        await previous.promise.catch(() => {});
+      for (const entry of sameRole) {
+        await entry.promise.catch(() => {});
       }
       return this.command(target, wanted, { received, after, run });
     })();
-    const entry = { run, promise };
-    this.inFlight = entry;
+    const entry = { role: target.role, run, promise };
+    this.inFlight.add(entry);
     try {
       return await promise;
     } finally {
-      if (this.inFlight === entry) {
-        this.inFlight = undefined;
-      }
+      this.inFlight.delete(entry);
     }
   }
 
-  /** The checks before every frame, on the latest configuration. */
+  /**
+   * The checks before every frame, on the latest configuration. With
+   * `context.seq`: the status the decision was taken on must still be the
+   * latest one.
+   */
   checkBeforeSend(context, target, wanted) {
     if (context.run.cancelled) {
       throw this.refusal(ERRORS.cancelled);
@@ -849,6 +912,9 @@ export class BalboaApp {
     ) {
       throw this.refusal(ERRORS.unknownDevice);
     }
+    if (context.seq !== undefined && this.spa.statusSeq !== context.seq) {
+      throw this.refusal(ERRORS.stateChanged);
+    }
   }
 
   async command(target, wanted, { received, after, run }) {
@@ -857,6 +923,7 @@ export class BalboaApp {
       generation: this.generation,
       spa,
       run,
+      seq: undefined,
       sendBy: received + TIMINGS.commandSendBy,
       answerBy: received + TIMINGS.commandAnswerBy,
     };
@@ -865,9 +932,8 @@ export class BalboaApp {
     }
     this.checkBeforeSend(context, target, wanted);
     // A status received after the click: never the one kept in memory.
-    let status;
     try {
-      status = await this.waitStatus(
+      await this.waitStatus(
         spa,
         (_s, seq) => seq > after,
         Math.min(received + TIMINGS.commandFreshBy, context.sendBy),
@@ -878,9 +944,9 @@ export class BalboaApp {
     }
     this.checkBeforeSend(context, target, wanted);
     if (wanted.kind === 'setpoint') {
-      return this.setpoint(context, target, wanted, status);
+      return this.setpoint(context, target, wanted);
     }
-    return this.toggle(context, target, wanted, status);
+    return this.toggle(context, target, wanted);
   }
 
   /** The raw byte of a setpoint in the unit and range the spa uses now. */
@@ -906,7 +972,16 @@ export class BalboaApp {
     return fahrenheit;
   }
 
-  async setpoint(context, target, wanted, status) {
+  /** The value of a setpoint byte in °C, in the unit of `status`. */
+  byteCelsius(status, byte) {
+    return status.celsius ? byte / 2 : (byte - 32) / 1.8;
+  }
+
+  async setpoint(context, target, wanted) {
+    const spa = context.spa;
+    // The latest status, never one superseded while waiting.
+    const status = spa.status;
+    context.seq = spa.statusSeq;
     const byte = this.setpointByte(status, wanted.value);
     const key = `${target.mac}:${target.role}`;
     if (status.raw.target === byte && !this.guardActive(key)) {
@@ -914,16 +989,20 @@ export class BalboaApp {
       return;
     }
     this.send(context, target, wanted, MESSAGE.SET_TEMPERATURE, [byte], () => {
-      // The ceiling may have been lowered meanwhile: the byte is checked again.
-      if (
-        status.celsius ? byte / 2 > this.config.cap : (byte - 32) / 1.8 > this.config.cap + 1e-9
-      ) {
+      // The unit and the range of the spa now, and the ceiling now.
+      const latest = this.spa.status;
+      if (latest.celsius !== status.celsius || latest.raw.range !== status.raw.range) {
+        throw this.refusal(ERRORS.stateChanged);
+      }
+      if (this.byteCelsius(latest, byte) > Math.min(this.config.cap, SPA_CAP.max) + 1e-9) {
         throw this.refusal(ERRORS.cap(this.config.cap));
       }
     });
+    const sentSeq = context.seq;
     this.logger.info(`Balboa setpoint: ${wanted.value} °C`);
-    this.guard(key, { from: status.raw.target, expected: byte, read: (s) => s.raw.target });
-    await this.confirm(context, (s) => s.raw.target === byte);
+    this.guard(key, { from: status.raw.target, read: (s) => s.raw.target, seq: sentSeq });
+    // Only a status received after the frame confirms it.
+    await this.confirm(context, (s, seq) => seq > sentSeq && s.raw.target === byte);
   }
 
   /** Sends one frame now, or refuses unsent (late, not allowed, not connected). */
@@ -966,6 +1045,10 @@ export class BalboaApp {
       const value = status.lights[number - 1];
       return value === undefined ? undefined : value ? 1 : 0;
     }
+    if (kind === F.BLOWER && blowerAmbiguous(this.spa.configuration, number)) {
+      // Its bits overlap the circulation pump: never decided on them.
+      return undefined;
+    }
     const raw = kind === F.PUMP ? status.pumps[number - 1] : status.blowers[number - 1];
     return speedOf(raw, statesOf(this.spa.configuration, kind, number));
   }
@@ -994,64 +1077,80 @@ export class BalboaApp {
     return { code: base + number - 1, steps: entry.states - 1, options: SPEEDS[entry.states] };
   }
 
-  async toggle(context, target, wanted, status) {
+  /**
+   * "Ready" keeps the setpoint set on the spa: refused when it is unknown or
+   * above the ceiling (it may have been set at the panel).
+   */
+  checkReady(wanted) {
+    if (wanted.target !== 'ready') {
+      return;
+    }
+    const target = this.spa?.status?.target;
+    if (target === undefined) {
+      throw this.refusal(ERRORS.missingValue);
+    }
+    if (target > Math.min(this.config.cap, SPA_CAP.max)) {
+      throw this.refusal(ERRORS.readyAboveCap(target, this.config.cap));
+    }
+  }
+
+  async toggle(context, target, wanted) {
+    const spa = context.spa;
     const { code, steps, options } = this.toggleOf(target);
     if (options && !options.includes(wanted.target)) {
       throw this.refusal(ERRORS.badValue);
     }
     const key = `${target.mac}:${target.role}`;
-    let current = this.readToggle(target, status);
     if (this.guardActive(key)) {
-      const guard = this.guards.get(key);
-      if (guard.expected === wanted.target) {
-        // The previous command asked the same: it is on its way.
-        return;
-      }
+      // A press may still act: nothing is decided before it shows.
       if (!wanted.protective) {
         throw this.refusal(ERRORS.moving);
       }
-      // A stop waits for the previous toggle to show (never a toggle on a
-      // state that may be about to change), within the time to send.
+      // A stop waits for it (within its time to send), then decides on the
+      // status after it.
       try {
-        status = await this.waitStatus(
-          context.spa,
-          () => !this.guardActive(key),
-          context.sendBy,
-          context.run,
-        );
+        await this.waitStatus(spa, () => !this.guardActive(key), context.sendBy, context.run);
       } catch {
         throw this.refusal(ERRORS.moving);
       }
-      current = this.readToggle(target, status);
-    }
-    if (current === undefined) {
-      throw this.refusal(ERRORS.missingValue);
-    }
-    if (current === wanted.target) {
-      return;
     }
     const read = (s) => this.readToggle(target, s);
-    for (let step = 0; step < steps; step += 1) {
-      if (step > 0 && this.now() > context.sendBy) {
-        // A toggle already left and its effect was seen, but not the end.
+    let sent = 0;
+    for (;;) {
+      // The latest status, never one superseded while waiting.
+      const status = spa.status;
+      context.seq = spa.statusSeq;
+      const current = read(status);
+      if (current === undefined) {
+        throw this.refusal(sent > 0 ? ERRORS.sentUnconfirmed : ERRORS.missingValue);
+      }
+      if (current === wanted.target) {
+        return;
+      }
+      if (sent >= steps || (sent > 0 && this.now() > context.sendBy)) {
+        // Every press allowed left, or no time left for the next one.
         throw this.refusal(ERRORS.sentUnconfirmed);
       }
-      const before = current;
       try {
-        this.send(context, target, wanted, MESSAGE.TOGGLE_STATE, [code]);
+        this.checkReady(wanted);
+        this.send(context, target, wanted, MESSAGE.TOGGLE_STATE, [code], () =>
+          this.checkReady(wanted),
+        );
       } catch (err) {
-        // After a first toggle, whatever stops the next one: a frame did leave.
-        throw step > 0 ? this.refusal(ERRORS.sentUnconfirmed) : err;
+        // After a first press, whatever stops the next one: a frame did leave.
+        throw sent > 0 ? this.refusal(ERRORS.sentUnconfirmed) : err;
       }
+      sent += 1;
+      const sentSeq = context.seq;
       this.logger.info(`Balboa ${target.role}: toggle towards ${wanted.target}`);
-      this.guard(key, { from: before, expected: wanted.target, read });
-      let seen;
+      this.guard(key, { from: current, read, seq: sentSeq });
       try {
-        seen = await this.waitStatus(
-          context.spa,
-          (s) => {
+        // Only a status received after the press shows its effect.
+        await this.waitStatus(
+          spa,
+          (s, seq) => {
             const value = read(s);
-            return value !== undefined && value !== before;
+            return seq > sentSeq && value !== undefined && value !== current;
           },
           context.answerBy,
           context.run,
@@ -1059,13 +1158,7 @@ export class BalboaApp {
       } catch {
         throw this.refusal(ERRORS.sentUnconfirmed);
       }
-      current = read(seen);
-      if (current === wanted.target) {
-        return;
-      }
     }
-    // Every toggle allowed was sent and none gave the state asked.
-    throw this.refusal(ERRORS.sentUnconfirmed);
   }
 
   // --- Guards ----------------------------------------------------------------------
@@ -1074,11 +1167,12 @@ export class BalboaApp {
    * After a frame that changes a setting, until a status shows its effect:
    * nothing is decided on a state that may not show it yet (a toggle sent
    * twice would undo itself). The guard keeps the value from before the
-   * frame: only a status with another value lifts it (the frame acted);
-   * a status equal to it, or unknown, lifts nothing. 20 s at most.
+   * frame and the status it was decided on: only a later status with
+   * another value lifts it (the frame acted); a status equal to it, or
+   * unknown, lifts nothing. 20 s at most.
    */
-  guard(key, { from, expected, read }) {
-    this.guards.set(key, { from, expected, read, until: this.now() + TIMINGS.guard });
+  guard(key, { from, read, seq }) {
+    this.guards.set(key, { from, read, seq, until: this.now() + TIMINGS.guard });
   }
 
   guardActive(key) {
@@ -1091,9 +1185,9 @@ export class BalboaApp {
   }
 
   /** A status, through the guards of its spa. */
-  observe(mac, status) {
+  observe(mac, status, seq) {
     for (const [key, guard] of [...this.guards]) {
-      if (!key.startsWith(`${mac}:`) || !this.guardActive(key)) {
+      if (!key.startsWith(`${mac}:`) || !this.guardActive(key) || seq <= guard.seq) {
         continue;
       }
       let value;

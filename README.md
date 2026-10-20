@@ -48,7 +48,9 @@ Gladys ⇄ SDK ⇄ src/handlers.js ⇄ src/app.js (BalboaApp)
   all; the effect awaited until 4.3 s, else "sent, without confirmation".
   Toggles go one at a time, each after a status showed the previous one; a
   guard (until a status shows the effect, 20 s at most) prevents a second
-  press on an unknown outcome. One command at a time.
+  press on an unknown outcome. One command at a time; stops run side by side
+  on different equipment. Decisions on the latest status, a frame not sent if
+  a newer one arrived; confirmations only by a status after the frame.
 
 ## Credits
 
