@@ -6,8 +6,8 @@
     "en": "Balboa spas with a BWA Wi-Fi module, locally: temperature, setpoint, pumps, lights, filtration.",
     "fr": "Spas Balboa avec module Wi-Fi BWA, en local : température, consigne, pompes, éclairage."
   },
-  "version": "0.1.0",
-  "docker_image": "ghcr.io/lm1lc3n7/gladys-balboa:0.1.0",
+  "version": "0.1.1",
+  "docker_image": "ghcr.io/lm1lc3n7/gladys-balboa:0.1.1",
   "gladys_version": ">=5.1.0",
   "cover_image": "https://raw.githubusercontent.com/LM1LC3N7/gladys-balboa/main/cover.png",
   "categories": ["appliances", "climate"],
