@@ -1,6 +1,6 @@
 {
   "name": "gladys-balboa",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Gladys Assistant external integration for Balboa spas with a BWA Wi-Fi module, over the local network: water temperature, setpoint, heat mode, pumps, blowers, lights and filter cycles, the heating and the pumps behind off-by-default options, the setpoint capped at 40 °C. Unofficial, not affiliated with Balboa Water Group.",
   "type": "module",
