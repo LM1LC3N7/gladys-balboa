@@ -6,8 +6,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
 import { DEFAULT_CONFIG } from '../src/config.js';
 import { ACTIONS, SPA_CAP } from '../src/constants.js';
+import { buildDevice, rolesOf } from '../src/devices.js';
+import { assertCoreDevice } from './helpers/coreFeature.js';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const manifest = JSON.parse(read('gladys-assistant-integration.json'));
@@ -116,4 +119,36 @@ test('the actions are the ones the code handles', () => {
   assert.equal(manifest.scene_actions, undefined);
   assert.equal(manifest.scene_triggers, undefined);
   assert.equal(manifest.widgets, undefined);
+});
+
+test('every feature of every spa layout has a numeric min and max and the other core fields', () => {
+  const gladys = createFakeGladys();
+  const states = [2, 3, 4];
+  const full = {
+    pumps: Array.from({ length: 8 }, (_, index) => ({ index, states: states[index % 3] })),
+    blowers: [
+      { index: 0, states: 3 },
+      { index: 1, states: 4 },
+    ],
+    lights: [
+      { index: 0, states: 2 },
+      { index: 1, states: 2 },
+    ],
+    aux: [{ index: 0 }, { index: 1 }],
+    misters: [{ index: 0 }],
+    circulation: true,
+  };
+  let features = 0;
+  for (const language of ['en', 'fr']) {
+    for (const configuration of [undefined, full, { ...full, circulation: false }]) {
+      const device = buildDevice(gladys, '001527aabbcc', {
+        roles: rolesOf(configuration),
+        configuration,
+        info: { model: 'BP501G1', version: 'M100_220 V43.0' },
+        language,
+      });
+      features += assertCoreDevice(device, `${language} ${configuration ? 'full' : 'unknown'}`);
+    }
+  }
+  assert.equal(features, 2 * (8 + 8 + 9 + 2 + 2 + 2 + 1 + 8 + 8 + 2 + 2 + 2 + 1));
 });

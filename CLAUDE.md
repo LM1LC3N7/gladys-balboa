@@ -8,7 +8,7 @@ already taken and the next milestones.
 
 A Gladys Assistant **external integration** of type `device`: a Node.js
 service (Node 22+, ESM, no build step) in its own sandboxed Docker container,
-talking to Gladys through `@gladysassistant/integration-sdk` (v0.15), its only
+talking to Gladys through `@gladysassistant/integration-sdk` (v0.16), its only
 runtime dependency (the spa is reached through our own TCP client on
 `node:net`). It connects to the BWA Wi-Fi module of a Balboa spa on the
 local network (TCP 4257, no cloud, no authentication, an undocumented
@@ -20,7 +20,7 @@ setpoint capped. Never tested with a real spa, not affiliated with Balboa.
 
 ```bash
 npm install
-npm test                                  # node --test, the built-in runner
+npm test                                  # node --test --test-timeout=60000
 node --test test/app.test.js              # one file
 npm run lint                              # ESLint
 npm run format:check                      # Prettier, as the CI runs it
@@ -85,3 +85,9 @@ scripts/cover.mjs         cover.png generator
 - Code, comments, README in English; `docs/en.md` and `docs/fr.md` kept in sync.
 - Every user-visible change adds a line under `## [Unreleased]` in
   `CHANGELOG.md`; versions belong to the Release workflow.
+- **Features follow the core model.** Every feature has a numeric `min` and
+  `max` (0/0 for text and select), `read_only` and `has_feedback`: Gladys
+  answers HTTP 422 otherwise, and the SDK's fake Gladys does not check it
+  (`test/helpers/coreFeature.js` does). The device carries `should_poll: false`
+  (Gladys 5.3 polls a device with `poll_frequency` unless it says
+  `should_poll: false`).

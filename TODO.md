@@ -172,3 +172,9 @@ up to date at the end of every milestone.
 github:GladysAssistant/integration-store .`) cannot be run by the
   development agent: it runs at publication (main session). No Docker on
   this PC: the image was not built locally.
+- **SDK `^0.16.0`** (2026-11-04, migration wave 7): it adds the ai, tts and
+  music types; no effect here (`poll_frequency` unused, the device carries
+  `should_poll: false`). Every feature already had a numeric `min` and `max`;
+  `test/helpers/coreFeature.js` now checks each one against the core model.
+  `npm test` runs with `--test-timeout=60000`. `keywords`, `countries` and
+  `gladys_version >= 5.3.0` wait until Gladys 5.3 is widespread.
